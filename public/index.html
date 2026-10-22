@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reservas de laboratorio</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; margin: 0; background: #f6f7f9; color: #1a1a1a; }
+  header { background: #1f2937; color: #fff; padding: 12px 20px; display: flex; gap: 12px; align-items: center; }
+  header h1 { font-size: 18px; margin: 0 8px 0 0; }
+  nav button { background: #374151; color: #fff; border: 0; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+  nav button.active { background: #2563eb; }
+  main { max-width: 960px; margin: 0 auto; padding: 20px; }
+  section.card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  label { display: block; font-size: 13px; margin: 8px 0 4px; }
+  input, select { width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+  button.primary { background: #2563eb; color: #fff; border: 0; padding: 9px 14px; border-radius: 6px; cursor: pointer; }
+  button.danger { background: #dc2626; color: #fff; border: 0; padding: 9px 14px; border-radius: 6px; cursor: pointer; }
+  button.ghost { background: #e5e7eb; border: 0; padding: 9px 14px; border-radius: 6px; cursor: pointer; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+  th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; }
+  .muted { color: #6b7280; font-size: 13px; }
+  .ok { color: #15803d; font-weight: bold; }
+  .no { color: #b91c1c; font-weight: bold; }
+  dialog { border: 1px solid #ccc; border-radius: 10px; padding: 20px; max-width: 440px; width: 92vw; }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  #msg { min-height: 22px; margin-top: 8px; font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Reservas de laboratorio</h1>
+  <nav>
+    <button id="tab-reservas" class="active">Reservas</button>
+    <button id="tab-disponibilidad">Disponibilidad</button>
+    <button id="tab-config">Configuración</button>
+  </nav>
+</header>
+<main>
+  <div id="msg" role="status"></div>
+
+  <!-- RESERVAS -->
+  <section id="view-reservas" class="card">
+    <h2>Unidades</h2>
+    <p class="muted">Inventario precargado (5 unidades). No administrable por API.</p>
+    <ul id="units-list"><li>Cargando…</li></ul>
+
+    <h2>Crear reserva</h2>
+    <form id="create-form">
+      <label for="f-unit">Unidad</label>
+      <select id="f-unit" required></select>
+      <label for="f-requester">Solicitante</label>
+      <input id="f-requester" placeholder="Ej: Ana Gómez" required>
+      <div class="row">
+        <div>
+          <label for="f-start">Inicio (local)</label>
+          <input id="f-start" type="datetime-local" required>
+        </div>
+        <div>
+          <label for="f-end">Fin (local)</label>
+          <input id="f-end" type="datetime-local" required>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="primary" type="submit">Crear reserva</button>
+      </div>
+    </form>
+
+    <h2>Reservas</h2>
+    <div class="row">
+      <div>
+        <label for="filter-unit">Filtrar por unidad</label>
+        <select id="filter-unit"><option value="">Todas</option></select>
+      </div>
+      <div>
+        <label for="filter-status">Filtrar por estado</label>
+        <select id="filter-status">
+          <option value="">Todos</option>
+          <option value="active">active</option>
+          <option value="cancelled">cancelled</option>
+        </select>
+      </div>
+    </div>
+    <div class="actions"><button class="ghost" id="btn-reload" type="button">Recargar</button></div>
+    <table>
+      <thead><tr><th>ID</th><th>Unidad</th><th>Solicitante</th><th>Inicio</th><th>Fin</th><th>Estado</th><th>Acción</th></tr></thead>
+      <tbody id="reservas-tbody"><tr><td colspan="7">Sin datos</td></tr></tbody>
+    </table>
+  </section>
+
+  <!-- DISPONIBILIDAD -->
+  <section id="view-disponibilidad" class="card" hidden>
+    <h2>Consultar disponibilidad</h2>
+    <p class="muted">Aplica las mismas reglas de overlap que la creación.</p>
+    <label for="a-unit">Unidad</label>
+    <select id="a-unit"></select>
+    <div class="row">
+      <div><label for="a-from">Desde (local)</label><input id="a-from" type="datetime-local"></div>
+      <div><label for="a-to">Hasta (local)</label><input id="a-to" type="datetime-local"></div>
+    </div>
+    <div class="actions"><button class="primary" id="btn-avail" type="button">Consultar disponibilidad</button></div>
+    <p id="avail-result" role="status"></p>
+  </section>
+
+  <!-- CONFIGURACIÓN -->
+  <section id="view-config" class="card" hidden>
+    <h2>Configuración</h2>
+    <p class="muted">GET/PUT /api/config. Solo editable desde esta pantalla.</p>
+    <label for="c-timezone">Zona horaria (timezone)</label>
+    <select id="c-timezone">
+      <option value="America/Argentina/Buenos_Aires">America/Argentina/Buenos_Aires (UTC-3)</option>
+      <option value="UTC">UTC</option>
+      <option value="America/Santiago">America/Santiago</option>
+      <option value="America/Sao_Paulo">America/Sao_Paulo</option>
+      <option value="America/Bogota">America/Bogota</option>
+      <option value="America/Mexico_City">America/Mexico_City</option>
+      <option value="Europe/Madrid">Europe/Madrid</option>
+    </select>
+    <div class="row">
+      <div><label for="c-maxDurationHours">maxDurationHours (vacío = sin límite)</label><input id="c-maxDurationHours" type="number" min="0" step="any" placeholder="sin límite"></div>
+      <div><label for="c-maxPastDays">maxPastDays (vacío = sin límite)</label><input id="c-maxPastDays" type="number" min="0" step="any" placeholder="sin límite"></div>
+    </div>
+    <label for="c-maxFutureHours">maxFutureHours (vacío = sin límite)</label>
+    <input id="c-maxFutureHours" type="number" min="0" step="any" placeholder="sin límite">
+    <div class="actions">
+      <button class="primary" id="btn-save-config" type="button">Guardar configuración</button>
+    </div>
+    <hr>
+    <h3>Zona de peligro</h3>
+    <div class="actions"><button class="danger" id="btn-reset" type="button">Resetear base de datos</button></div>
+  </section>
+</main>
+
+<!-- MODAL OVERRIDE PASADO -->
+<dialog id="modal-override">
+  <form method="dialog" id="override-form">
+    <h3>Permitir fecha pasada (demo)</h3>
+    <p class="muted">Las fechas pasadas están rechazadas por defecto. Este override es solo demostración, no es seguridad real.</p>
+    <label for="o-user">Usuario</label>
+    <input id="o-user" value="admin" readonly disabled>
+    <label for="o-pass">Contraseña</label>
+    <input id="o-pass" type="password" value="admin" readonly disabled>
+    <div class="actions">
+      <button class="ghost" value="cancel" id="o-cancel" type="submit">Cancelar</button>
+      <button class="primary" value="accept" id="o-accept" type="submit">Aceptar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- MODAL RESET -->
+<dialog id="modal-reset">
+  <form method="dialog" id="reset-form">
+    <h3>Resetear base de datos</h3>
+    <p>Cuidado. Resetear la base de datos borrará de forma permanente todas las reservas. Esta acción no se puede deshacer.</p>
+    <p>En futuras versiones se introducirá un sistema de backup.</p>
+    <label><input type="checkbox" id="reset-confirm-check" style="width:auto"> Entiendo que se borrarán las reservas y quiero continuar.</label>
+    <div class="actions">
+      <button class="ghost" value="cancel" type="submit">Cancelar</button>
+      <button class="danger" value="confirm" id="btn-confirm-reset" type="submit">Confirmar reset</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const msg = (t, isErr) => { const el = $('msg'); el.textContent = t || ''; el.style.color = isErr ? '#b91c1c' : '#15803d'; };
+let pendingPastPayload = null;
+let currentTimezone = 'America/Argentina/Buenos_Aires';
+
+function fmt(iso) {
+  try { return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short', timeZone: currentTimezone }).format(new Date(iso)); }
+  catch { return iso; }
+}
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(body.message || body.error || ('HTTP ' + r.status)); e.status = r.status; e.body = body; throw e; }
+  return body;
+}
+function fillUnitSelects(units) {
+  for (const id of ['f-unit', 'a-unit']) {
+    const sel = $(id); sel.innerHTML = '';
+    for (const u of units) { const o = document.createElement('option'); o.value = u.id; o.textContent = u.id + ' — ' + u.name; sel.appendChild(o); }
+  }
+  const f = $('filter-unit'); f.innerHTML = '<option value="">Todas</option>';
+  for (const u of units) { const o = document.createElement('option'); o.value = u.id; o.textContent = u.id; f.appendChild(o); }
+}
+async function loadUnits() {
+  const units = await api('/api/units');
+  $('units-list').innerHTML = units.map(u => '<li><b>' + u.id + '</b> — ' + u.name + '</li>').join('');
+  fillUnitSelects(units);
+}
+async function loadConfig() {
+  const cfg = await api('/api/config');
+  currentTimezone = cfg.timezone || currentTimezone;
+  const tz = $('c-timezone');
+  if (![...tz.options].some(o => o.value === cfg.timezone)) {
+    const o = document.createElement('option'); o.value = cfg.timezone; o.textContent = cfg.timezone; tz.appendChild(o);
+  }
+  tz.value = cfg.timezone;
+  $('c-maxDurationHours').value = cfg.limits.maxDurationHours ?? '';
+  $('c-maxPastDays').value = cfg.limits.maxPastDays ?? '';
+  $('c-maxFutureHours').value = cfg.limits.maxFutureHours ?? '';
+  // precargar modal override (no editable, aceptar siempre habilitado)
+  $('o-user').value = (cfg.admin && cfg.admin.username) || 'admin';
+  $('o-pass').value = (cfg.admin && cfg.admin.password) || 'admin';
+  $('o-user').readOnly = true; $('o-user').disabled = true;
+  $('o-pass').readOnly = true; $('o-pass').disabled = true;
+  $('o-accept').disabled = false;
+}
+async function loadReservations() {
+  const unit = $('filter-unit').value;
+  const status = $('filter-status').value;
+  const q = new URLSearchParams();
+  if (unit) q.set('unit', unit);
+  if (status) q.set('status', status);
+  const list = await api('/api/reservations' + (q.toString() ? '?' + q : ''));
+  const tb = $('reservas-tbody');
+  if (!list.length) { tb.innerHTML = '<tr><td colspan="7">Sin reservas</td></tr>'; return; }
+  tb.innerHTML = '';
+  for (const r of list) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + r.id.slice(0, 8) + '</td><td>' + r.unitId + '</td><td>' + r.requester +
+      '</td><td title="' + r.start + '">' + fmt(r.start) + '</td><td title="' + r.end + '">' + fmt(r.end) +
+      '</td><td>' + r.status + '</td>';
+    const td = document.createElement('td');
+    if (r.status === 'active') {
+      const b = document.createElement('button'); b.className = 'ghost'; b.textContent = 'Cancelar';
+      b.onclick = async () => { try { await api('/api/reservations/' + r.id, { method: 'DELETE' }); msg('Reserva cancelada.'); await loadReservations(); } catch (e) { msg(e.message, true); } };
+      td.appendChild(b);
+    } else td.textContent = '—';
+    tr.appendChild(td); tb.appendChild(tr);
+  }
+}
+async function createReservation(payload) {
+  return api('/api/reservations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+}
+function showTab(name) {
+  for (const t of ['reservas', 'disponibilidad', 'config']) {
+    $('view-' + t).hidden = t !== name;
+    $('tab-' + t).classList.toggle('active', t === name);
+  }
+}
+$('tab-reservas').onclick = () => showTab('reservas');
+$('tab-disponibilidad').onclick = () => showTab('disponibilidad');
+$('tab-config').onclick = () => showTab('config');
+
+$('create-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault(); msg('');
+  const payload = { unitId: $('f-unit').value, requester: $('f-requester').value, start: $('f-start').value, end: $('f-end').value };
+  try {
+    await createReservation(payload);
+    msg('Reserva creada.');
+    ev.target.reset();
+    await loadReservations();
+  } catch (e) {
+    if (e.body && e.body.error === 'PAST_NOT_ALLOWED') {
+      pendingPastPayload = payload;
+      await loadConfig();
+      $('modal-override').showModal();
+    } else msg(e.message, true);
+  }
+});
+$('override-form').addEventListener('submit', async (ev) => {
+  if (ev.submitter && ev.submitter.value === 'accept' && pendingPastPayload) {
+    ev.preventDefault();
+    try {
+      await createReservation({ ...pendingPastPayload, adminUser: $('o-user').value, adminPass: $('o-pass').value });
+      msg('Reserva en pasado creada con override demo.');
+      $('modal-override').close();
+      pendingPastPayload = null;
+      await loadReservations();
+    } catch (e) { msg(e.message, true); }
+  } else pendingPastPayload = null;
+});
+$('btn-avail').onclick = async () => {
+  const r = $('avail-result'); r.textContent = '';
+  try {
+    const q = new URLSearchParams({ unit: $('a-unit').value, from: $('a-from').value, to: $('a-to').value });
+    const data = await api('/api/availability?' + q);
+    r.textContent = data.available ? 'Disponible ✓' : 'Ocupado ✗';
+    r.className = data.available ? 'ok' : 'no';
+  } catch (e) { r.textContent = e.message; r.className = 'no'; }
+};
+$('btn-reload').onclick = loadReservations;
+$('filter-unit').onchange = loadReservations;
+$('filter-status').onchange = loadReservations;
+$('btn-save-config').onclick = async () => {
+  const numOrNull = (v) => (v === '' ? null : Number(v));
+  try {
+    const body = {
+      timezone: $('c-timezone').value,
+      limits: { maxDurationHours: numOrNull($('c-maxDurationHours').value), maxPastDays: numOrNull($('c-maxPastDays').value), maxFutureHours: numOrNull($('c-maxFutureHours').value) }
+    };
+    const saved = await api('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    currentTimezone = saved.timezone; msg('Configuración guardada.'); await loadReservations();
+  } catch (e) { msg(e.message, true); }
+};
+$('btn-reset').onclick = () => { $('reset-confirm-check').checked = false; $('modal-reset').showModal(); };
+$('reset-form').addEventListener('submit', async (ev) => {
+  if (ev.submitter && ev.submitter.value === 'confirm') {
+    if (!$('reset-confirm-check').checked) { ev.preventDefault(); msg('Marcá la casilla de confirmación para resetear.', true); return; }
+    ev.preventDefault();
+    try { await api('/api/admin/reset', { method: 'POST' }); $('modal-reset').close(); msg('Base de datos reseteada.'); await loadReservations(); }
+    catch (e) { msg(e.message, true); }
+  }
+});
+(async function init() {
+  try { await loadUnits(); await loadConfig(); await loadReservations(); }
+  catch (e) { msg(e.message, true); }
+})();
+</script>
+</body>
+</html>
