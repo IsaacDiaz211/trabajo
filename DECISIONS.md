@@ -38,6 +38,7 @@ R1-R10 PASS. 6/6 tests incl. persistencia y calendario. Sin fixes de código. Pe
 - Verificación harness: `bun test → 6 pass, 0 fail, 88 expects` (2026-10-22).
 
 ## Episodio 2 — Mejora UI configuración (SATISFIES)
+- Origen: control manual humano de la UI (revisión de la pantalla Configuración con captura; 3 errores básicos).
 - Objetivo: 3 fixes básicos (zona horaria flexible, labels sin variables, modal guardar).
 - Contexto: `spec.md`, `plan.md`, `public/index.html`, `src/config.ts`, imagen de la página Configuración.
 - Extracto de instrucción: "corregí zona pobre → UTC±N, labels humanas, modal '¿Seguro que quieres guardar los cambios?'; devolvé RESUMEN_AGENTE; no hagas commit".
@@ -77,3 +78,4 @@ R1-R10 PASS. 6/6 tests incl. persistencia y calendario. Sin fixes de código. Pe
 - Decisión humana: aceptar. Motivo: 4/4 secciones + reinicio documentado con esperado/observado + 14/14 tests + sin secretos en git.
 - Evidencia: commit actual (`README.md`, `docs/RESTART.md`).
 - Verificación harness: `bun test → 14 pass, 0 fail, 163 expects`; `DATA_NO_VERSIONADA_OK` + `IGNORE_OK`.
+- Redacción del README pulida manualmente (acción humana, sin agente): entorno, episodio 2 y estilo global.
