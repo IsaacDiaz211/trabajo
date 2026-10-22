@@ -52,3 +52,28 @@ R1-R10 PASS. 6/6 tests incl. persistencia y calendario. Sin fixes de código. Pe
 - Decisión humana: aceptar. Motivo: 3/3 fixes + `bun test` 14 pass verificado en harness.
 - Evidencia: commit actual (`public/index.html`, `src/config.ts`, `src/index.ts`, `tests/config.test.ts`, `tests/timezone-ui.test.ts`).
 - Verificación harness: `bun test → 14 pass, 0 fail, 163 expects` (Bun 1.3.12).
+
+## Episodio 3 — README + verificación final de reinicio (SATISFIES)
+- Objetivo: `README.md` con exactamente 4 secciones + verificación manual de reinicio reproducible documentada, sin secretos, `bun test` en verde, sin commit.
+- Contexto suministrado al agente: `spec.md`, `plan.md`, `work_enviroment.md`, `DECISIONS.md`, `package.json`, `src/`, `tests/`.
+- Extracto de instrucción: "Crear README.md con EXACTAMENTE 4 secciones (puede enlazar archivos) … Verificación manual de reinicio reproducible … No incluir secretos … Correr `bun test` y dejar en verde … Devolvé OBLIGATORIAMENTE `RESUMEN_AGENTE:` … No hagas commit".
+
+### RESUMEN_AGENTE (episodio 3)
+```
+- Objetivo: dejar listo README.md + verificación final (reinicio reproducible, sin secretos, tests en verde).
+- Archivos tocados (nuevos/editados, sin commit):
+  - README.md (nuevo: 4 secciones ## exactas — especificación, solución, preparación del agente, registro de decisiones — con enlaces a spec/plan/work_enviroment/DECISIONS/docs-RESTART; incluye ejemplo POST 201/409 observado, rutas ./data, advertencia reset + backup futuro, admin/admin como demo documentada)
+  - docs/RESTART.md (nuevo: procedimiento con DB aislada en /tmp via DB_PATH/CONFIG_PATH/PORT, comandos curl, tabla esperado vs observado, bun test 14 pass)
+  - DECISIONS.md (apéndice episodio 3)
+- Cómo verificar: `bun test → 14 pass, 0 fail, 163 expects`; `git check-ignore data/reservas.db data/config.json` OK (ignorados); `git ls-files` sin data/; reinicio manual: antes 2 reservas (MIC-01/active, OSC-01/cancelled) → tras reinicio mismas 2 con mismos ids, overlap 409, hueco liberado 201.
+```
+
+- Decisión humana: pendiente de revisión (diff sin commit). Evidencia: `README.md` (4x `##`), `docs/RESTART.md`, `bun test` 14 pass verificado en harness (2026-10-22, Bun 1.3.12 / pnpm 11.1.3 / OpenCode 1.16.2, sqlite 3.51.2 observada).
+
+### RESUMEN_REVIEWER (episodio 3: PARTIAL por forma, cerrado en harness)
+- README 4 secciones PASS, enlaces PASS, contenido solución PASS. Gaps: docs/RESTART paso detener sin comando explícito; reviewer sin exec (no pudo correr bun test ni git).
+- Cierre en harness: `docs/RESTART.md` paso 5 ahora con `kill %1` + alternativas; `bun test → 14 pass, 0 fail, 163 expects` ejecutado; `git ls-files` sin `data/`, `git check-ignore` OK para db y config.
+
+- Decisión humana: aceptar. Motivo: 4/4 secciones + reinicio documentado con esperado/observado + 14/14 tests + sin secretos en git.
+- Evidencia: commit actual (`README.md`, `docs/RESTART.md`).
+- Verificación harness: `bun test → 14 pass, 0 fail, 163 expects`; `DATA_NO_VERSIONADA_OK` + `IGNORE_OK`.
