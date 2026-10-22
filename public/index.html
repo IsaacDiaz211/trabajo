@@ -109,7 +109,7 @@
   <section id="view-config" class="card" hidden>
     <h2>Configuración</h2>
     <p class="muted">GET/PUT /api/config. Solo editable desde esta pantalla.</p>
-    <label for="c-timezone">Zona horaria (timezone)</label>
+    <label for="c-timezone">Zona horaria</label>
     <select id="c-timezone">
       <option value="America/Argentina/Buenos_Aires">America/Argentina/Buenos_Aires (UTC-3)</option>
       <option value="UTC">UTC</option>
@@ -118,12 +118,30 @@
       <option value="America/Bogota">America/Bogota</option>
       <option value="America/Mexico_City">America/Mexico_City</option>
       <option value="Europe/Madrid">Europe/Madrid</option>
+      <option value="__custom__">Personalizada (UTC±N)…</option>
     </select>
-    <div class="row">
-      <div><label for="c-maxDurationHours">maxDurationHours (vacío = sin límite)</label><input id="c-maxDurationHours" type="number" min="0" step="any" placeholder="sin límite"></div>
-      <div><label for="c-maxPastDays">maxPastDays (vacío = sin límite)</label><input id="c-maxPastDays" type="number" min="0" step="any" placeholder="sin límite"></div>
+    <div id="tz-custom-row" hidden>
+      <div class="row">
+        <div>
+          <label for="c-tz-sign">Signo (-/+)</label>
+          <select id="c-tz-sign">
+            <option value="-">-</option>
+            <option value="+">+</option>
+          </select>
+        </div>
+        <div>
+          <label for="c-tz-offset">Horas (0–14)</label>
+          <input id="c-tz-offset" type="number" min="0" max="14" step="1" value="3">
+        </div>
+      </div>
+      <label for="c-tz-custom">O escribir UTC±N (ej. UTC-5, UTC+9)</label>
+      <input id="c-tz-custom" placeholder="UTC-3">
     </div>
-    <label for="c-maxFutureHours">maxFutureHours (vacío = sin límite)</label>
+    <div class="row">
+      <div><label for="c-maxDurationHours">Duración máxima (horas) (vacío = sin límite)</label><input id="c-maxDurationHours" type="number" min="0" step="any" placeholder="sin límite"></div>
+      <div><label for="c-maxPastDays">Límite pasado (días) (vacío = sin límite)</label><input id="c-maxPastDays" type="number" min="0" step="any" placeholder="sin límite"></div>
+    </div>
+    <label for="c-maxFutureHours">Límite futuro (horas) (vacío = sin límite)</label>
     <input id="c-maxFutureHours" type="number" min="0" step="any" placeholder="sin límite">
     <div class="actions">
       <button class="primary" id="btn-save-config" type="button">Guardar configuración</button>
@@ -164,15 +182,53 @@
   </form>
 </dialog>
 
+<!-- MODAL SAVE CONFIG -->
+<dialog id="modal-save-config">
+  <form method="dialog" id="save-config-form">
+    <h3>Guardar configuración</h3>
+    <p>¿Seguro que quieres guardar los cambios?</p>
+    <div class="actions">
+      <button class="ghost" value="cancel" type="submit">Cancelar</button>
+      <button class="primary" value="accept" id="btn-confirm-save-config" type="submit">Aceptar</button>
+    </div>
+  </form>
+</dialog>
+
 <script>
 const $ = (id) => document.getElementById(id);
 const msg = (t, isErr) => { const el = $('msg'); el.textContent = t || ''; el.style.color = isErr ? '#b91c1c' : '#15803d'; };
 let pendingPastPayload = null;
 let currentTimezone = 'America/Argentina/Buenos_Aires';
 
+function displayTimeZone(tz) {
+  const m = /^UTC([+-])(\d{1,2})$/.exec(tz || '');
+  if (!m) return tz;
+  const n = Number(m[2]);
+  if (n === 0) return 'UTC';
+  return 'Etc/GMT' + (m[1] === '+' ? '-' : '+') + n;
+}
 function fmt(iso) {
-  try { return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short', timeZone: currentTimezone }).format(new Date(iso)); }
-  catch { return iso; }
+  try { return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short', timeZone: displayTimeZone(currentTimezone) }).format(new Date(iso)); }
+  catch { try { return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'UTC' }).format(new Date(iso)); } catch { return iso; } }
+}
+function parseUtcOffset(tz) {
+  const m = /^UTC([+-])(\d{1,2})$/.exec((tz || '').trim());
+  if (!m) return null;
+  const n = Number(m[2]);
+  if (!Number.isInteger(n) || n < 0 || n > 14) return null;
+  return { sign: m[1], offset: n };
+}
+function syncCustomRow() { $('tz-custom-row').hidden = $('c-timezone').value !== '__custom__'; }
+function getSelectedTimezone() {
+  const v = $('c-timezone').value;
+  if (v !== '__custom__') return v;
+  const typed = $('c-tz-custom').value.trim();
+  if (typed !== '') return typed;
+  const sign = $('c-tz-sign').value === '+' ? '+' : '-';
+  let n = Number($('c-tz-offset').value);
+  if (!Number.isFinite(n)) n = 0;
+  n = Math.max(0, Math.min(14, Math.trunc(n)));
+  return 'UTC' + sign + n;
 }
 async function api(path, opts) {
   const r = await fetch(path, opts);
@@ -197,10 +253,20 @@ async function loadConfig() {
   const cfg = await api('/api/config');
   currentTimezone = cfg.timezone || currentTimezone;
   const tz = $('c-timezone');
-  if (![...tz.options].some(o => o.value === cfg.timezone)) {
-    const o = document.createElement('option'); o.value = cfg.timezone; o.textContent = cfg.timezone; tz.appendChild(o);
+  const parsed = parseUtcOffset(cfg.timezone || '');
+  if (parsed) {
+    tz.value = '__custom__';
+    $('c-tz-sign').value = parsed.sign;
+    $('c-tz-offset').value = String(parsed.offset);
+    $('c-tz-custom').value = cfg.timezone;
+  } else {
+    if (![...tz.options].some(o => o.value === cfg.timezone)) {
+      const o = document.createElement('option'); o.value = cfg.timezone; o.textContent = cfg.timezone; tz.appendChild(o);
+    }
+    tz.value = cfg.timezone;
+    $('c-tz-custom').value = '';
   }
-  tz.value = cfg.timezone;
+  syncCustomRow();
   $('c-maxDurationHours').value = cfg.limits.maxDurationHours ?? '';
   $('c-maxPastDays').value = cfg.limits.maxPastDays ?? '';
   $('c-maxFutureHours').value = cfg.limits.maxFutureHours ?? '';
@@ -288,17 +354,31 @@ $('btn-avail').onclick = async () => {
 $('btn-reload').onclick = loadReservations;
 $('filter-unit').onchange = loadReservations;
 $('filter-status').onchange = loadReservations;
-$('btn-save-config').onclick = async () => {
+$('c-timezone').onchange = syncCustomRow;
+// Fix mínimo: si la opción personalizada está activa y el usuario toca los
+// controles (signo/número), limpiar el texto manual precargado para que
+// getSelectedTimezone() use los controles y no el offset viejo.
+$('c-tz-sign').addEventListener('change', () => { $('c-tz-custom').value = ''; });
+$('c-tz-offset').addEventListener('input', () => { $('c-tz-custom').value = ''; });
+$('c-tz-offset').addEventListener('change', () => { $('c-tz-custom').value = ''; });
+$('btn-save-config').onclick = () => { msg(''); $('modal-save-config').showModal(); };
+$('save-config-form').addEventListener('submit', async (ev) => {
+  if (!(ev.submitter && ev.submitter.value === 'accept')) return;
+  ev.preventDefault();
   const numOrNull = (v) => (v === '' ? null : Number(v));
   try {
     const body = {
-      timezone: $('c-timezone').value,
+      timezone: getSelectedTimezone(),
       limits: { maxDurationHours: numOrNull($('c-maxDurationHours').value), maxPastDays: numOrNull($('c-maxPastDays').value), maxFutureHours: numOrNull($('c-maxFutureHours').value) }
     };
     const saved = await api('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    currentTimezone = saved.timezone; msg('Configuración guardada.'); await loadReservations();
+    currentTimezone = saved.timezone;
+    $('modal-save-config').close();
+    msg('Configuración guardada.');
+    await loadConfig();
+    await loadReservations();
   } catch (e) { msg(e.message, true); }
-};
+});
 $('btn-reset').onclick = () => { $('reset-confirm-check').checked = false; $('modal-reset').showModal(); };
 $('reset-form').addEventListener('submit', async (ev) => {
   if (ev.submitter && ev.submitter.value === 'confirm') {

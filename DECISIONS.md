@@ -36,3 +36,19 @@ R1-R10 PASS. 6/6 tests incl. persistencia y calendario. Sin fixes de código. Pe
 - Decisión humana: aceptar. Motivo: 10/10 requisitos en código + `bun test` 6 pass verificado en harness (88 expects, Bun 1.3.12). Correcciones aplicadas en 2 iteraciones.
 - Evidencia: commit actual (`src/`, `public/index.html`, `tests/reservations.test.ts`), `bun test` 6 pass.
 - Verificación harness: `bun test → 6 pass, 0 fail, 88 expects` (2026-10-22).
+
+## Episodio 2 — Mejora UI configuración (SATISFIES)
+- Objetivo: 3 fixes básicos (zona horaria flexible, labels sin variables, modal guardar).
+- Contexto: `spec.md`, `plan.md`, `public/index.html`, `src/config.ts`, imagen de la página Configuración.
+- Extracto de instrucción: "corregí zona pobre → UTC±N, labels humanas, modal '¿Seguro que quieres guardar los cambios?'; devolvé RESUMEN_AGENTE; no hagas commit".
+
+### RESUMEN_AGENTE (worker)
+- `src/config.ts`: acepta IANA + UTC±N (0-14); `src/index.ts`: 400 INVALID_TIMEZONE; `public/index.html`: labels "Zona horaria / Duración máxima (horas) / Límite pasado (días) / Límite futuro (horas)", select + custom signo/número/texto UTC±N, modal `#modal-save-config` con texto exacto, PUT solo al aceptar; `tests/config.test.ts` + `tests/timezone-ui.test.ts`. `bun test` 14 pass.
+
+### RESUMEN_REVIEWER (1ª: PARTIAL → final: SATISFIES)
+- 1ª: labels PASS, modal PASS, zona PARTIAL (texto manual tenía prioridad sobre controles). Fix: limpiar texto al tocar signo/número + test UTC-5→UTC+9.
+- Final: 3 fixes PASS, listeners `public/index.html:361-363` OK, test eventos `tests/timezone-ui.test.ts:60-135` OK. Sin gaps funcionales.
+
+- Decisión humana: aceptar. Motivo: 3/3 fixes + `bun test` 14 pass verificado en harness.
+- Evidencia: commit actual (`public/index.html`, `src/config.ts`, `src/index.ts`, `tests/config.test.ts`, `tests/timezone-ui.test.ts`).
+- Verificación harness: `bun test → 14 pass, 0 fail, 163 expects` (Bun 1.3.12).

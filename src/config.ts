@@ -40,14 +40,48 @@ export const CONFIG_PATH = resolve(
   process.env.CONFIG_PATH ?? "./data/config.json",
 );
 
+/** Acepta `UTC±N` con N entero 0-14 (ej. UTC-5, UTC+9, UTC+0, UTC+14). */
+const UTC_OFFSET_RE = /^UTC([+-])(\d{1,2})$/;
+
+/** Válido si es IANA reconocida por Intl o `UTC±N` con N 0-14. */
+export function isValidTimezone(tz: unknown): boolean {
+  if (typeof tz !== "string") return false;
+  const t = tz.trim();
+  if (t === "") return false;
+  const m = UTC_OFFSET_RE.exec(t);
+  if (m) {
+    const n = Number(m[2]);
+    return Number.isInteger(n) && n >= 0 && n <= 14;
+  }
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: t });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function assertValidTimezone(tz: string): void {
+  if (!isValidTimezone(tz)) {
+    throw new Error(
+      `Zona horaria inválida: debe ser IANA válida o UTC±N con N 0-14 (recibido: ${JSON.stringify(tz)})`,
+    );
+  }
+}
+
 /** Mezcla parcial sobre los defaults (merge profundo de un nivel). */
 export function mergeConfig(base: AppConfig, patch: unknown): AppConfig {
   if (!patch || typeof patch !== "object" || Array.isArray(patch)) return base;
   const p = patch as Partial<AppConfig>;
   return {
-    timezone: typeof p.timezone === "string" && p.timezone.trim() !== ""
-      ? p.timezone
-      : base.timezone,
+    timezone: (() => {
+      if (typeof p.timezone === "string" && p.timezone.trim() !== "") {
+        const tz = p.timezone.trim();
+        assertValidTimezone(tz);
+        return tz;
+      }
+      return base.timezone;
+    })(),
     limits: {
       maxDurationHours: normLimit(p.limits?.maxDurationHours, base.limits.maxDurationHours),
       maxPastDays: normLimit(p.limits?.maxPastDays, base.limits.maxPastDays),

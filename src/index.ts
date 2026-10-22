@@ -98,6 +98,9 @@ app.put("/api/config", async (c) => {
     const updated = mergeConfig(db.loadConfig(), body);
     return c.json(db.saveConfig(updated));
   } catch (err) {
+    if (err instanceof Error && err.message.startsWith("Zona horaria inválida")) {
+      return c.json({ error: "INVALID_TIMEZONE", message: err.message }, 400);
+    }
     if (err instanceof Error && err.message.startsWith("Límite inválido")) {
       return c.json({ error: "INVALID_LIMITS", message: err.message }, 400);
     }
